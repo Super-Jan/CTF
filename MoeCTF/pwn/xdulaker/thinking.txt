@@ -1,0 +1,71 @@
+1. 代码审计与逻辑分析
+A. 程序结构
+程序是一个典型的菜单题，拥有无限循环：
+Option 1 (pull): 泄露地址。
+Option 2 (photo): 读取输入到栈上，没有明显溢出。
+Option 3 (laker): 核心漏洞函数，但有前置检查。
+B. 漏洞点分析
+1. ASLR/PIE 绕过 (Info Leak)
+opt 是存储菜单选项的全局变量（位于 .bss 或 .data 段）。
+程序直接打印了 &opt 的内存地址。
+利用： 通过泄露的地址减去 opt 在二进制文件中的偏移，我们可以计算出程序的 基地址 (PIE Base)。这对于绕过 PIE 保护至关重要，让我们能找到 ROP Gadgets。
+2. 栈变量复用 (Check Bypass) 我们看核心漏洞函数 laker()：
+问题： s1 是一个局部变量，且没有初始化。它的值是栈上残留的“脏数据”。
+利用： 我们需要通过调用另一个函数，在栈的相同位置留下 "xdulaker" 字符串。
+观察 photo() 函数：
+栈帧分析：
+photo 的 buf 位于 rbp - 0x50。
+laker 的 s1 位于 rbp - 0x30。
+由于这两个函数都由 main 调用，它们的栈帧基址 rbp 通常是相同的（或者偏移固定）。
+s1 相对于 buf 的偏移量 = 0x50 - 0x30 = 0x20 (32 字节)。
+策略： 先运行 photo()，输入 32 字节的垃圾数据 + "xdulaker"。当 photo 返回后，紧接着运行 laker，此时 s1 的位置正好对应之前写入 "xdulaker" 的内存位置，从而绕过 memcmp。
+3. 栈溢出 (Stack Overflow)
+s1 大小为 48 字节 (0x30)。
+read 读取 256 字节 (0x100)。
+结论： 存在巨大的栈溢出，可以覆盖返回地址 (Return Address)，构建 ROP 链。
+
+2. 利用思路 (Exploit Strategy)
+泄露基址： 选择功能 1 (pull)，获取 &opt 地址，计算程序基址 (Elf Base)。
+布置栈帧 (绕过 Check)： 选择功能 2 (photo)，发送 padding(32字节) + "xdulaker"。
+触发溢出与 ROP： 选择功能 3 (laker)。
+此时 memcmp 校验通过。
+发送 ROP 链 Payload。
+
+3. 启动调试并下断点
+gdb ./pwn
+我们需要在两个关键函数调用处停下来：
+photo 调用 read(0, buf, ...) 的地方。
+laker 调用 memcmp(s1, ...) 的地方。
+在 pwndbg 中输入：
+b photo
+b laker
+run
+
+2. 获取 photo 中 buf 的地址
+程序运行后，输入 2 进入 photo 函数，断点会被触发。
+使用 disass（或者看 pwndbg 的 context 界面）找到 read 函数的调用位置。
+在 x64 架构中，read(fd, buf, len) 的第二个参数 buf 存放在 RSI 寄存器中。
+一直按 ni (next instruction) 单步执行，直到运行到 call read 之前的一行。
+此时观察 $rsi 寄存器的值：
+# 假设此时停在 call read 前
+p/x $rsi
+# 输出示例: $1 = 0x7fffffffe100  <-- 记下这个地址，这是 buf 的地址
+
+3. 获取 laker 中 s1 的地址
+让程序继续运行 (c)，随便输入点东西结束 photo，回到主菜单。
+输入 3 进入 laker 函数，断点触发。
+找到 memcmp(s1, "xdulaker", ...) 的调用位置。
+在 x64 架构中，memcmp 的第一个参数 s1 存放在 RDI 寄存器中。
+ni 单步运行到 call memcmp 之前。
+此时观察 $rdi 寄存器的值：
+p/x $rdi
+# 输出示例: 0x7fffffffe120  <-- 记下这个地址，这是 s1 的地址
+
+4. 计算偏移
+现在你有了两个地址：
+buf = 0x7fffffffe100
+s1 = 0x7fffffffe120
+在 pwndbg 中直接计算：
+p/x 0x7fffffffe120 - 0x7fffffffe100
+# 输出: 0x20
+结论： s1 比 buf 高 0x20 (32) 个字节。也就是说，你在 photo 输入的前 32 个字节是填充，第 33 个字节开始就是 laker 中 s1 的内容。
