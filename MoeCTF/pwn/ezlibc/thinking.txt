@@ -1,0 +1,14 @@
+解题思路：
+1.通过printf函数泄露read函数中plt的值。
+2.计算elf的基地址，偏移量可通过ida中查看plt表项，或者gdb调试使用vmmap和got命令
+3.构造第一个payload，填充垃圾数据，rbp覆盖地址需要可写通常是bss段开头加上0x500左右，返回地址从main函数中选择，
+  有时候main的地址不一定可用，需要后面一点的地址
+4.因为动态链接延迟绑定机制，第二次泄露的就是read函数在got表中真实地址，计算libc基地址
+5.获取system、rdi、ret和/bin/sh在libc.so.6中地址
+6.构造第二个payload获取shell，有时候需要ret对齐16字节
+
+需要用到的命令
+readelf -s libc.so.6 | grep " read"
+ROPgadget --binary libc.so.6 --only "pop|ret"|grep rdi
+ROPgadget --binary libc.so.6 --only "ret"|grep ret
+readelf -S pwn | grep -E "bss|data"
