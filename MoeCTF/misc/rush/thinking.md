@@ -4,4 +4,5 @@
 
 通过画图工具，将二维码中缺失的定位块进行补全即可完成扫码。
 
-![image-20251122202421757](C:\Users\Gallagher\AppData\Roaming\Typora\typora-user-images\image-20251122202421757.png)
+
+<img width="1107" height="704" alt="image" src="https://github.com/user-attachments/assets/a5850155-6f70-4924-9c75-f68fe60259d2" />
