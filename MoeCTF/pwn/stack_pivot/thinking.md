@@ -2,7 +2,7 @@
 
  <img width="811" height="363" alt="image" src="https://github.com/user-attachments/assets/6decbce1-2c37-4fd3-a79f-b0d2aeebec7c" />
  
-pie没开，canany也没有
+pie没开，canany也没有\n
 
 拖进ida里面从main函数开始进行静态分析，没有system和binsh，需要ret2libc
 
